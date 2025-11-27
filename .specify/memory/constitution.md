@@ -1,50 +1,63 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+<!--
+Sync Impact Report:
+- Version change: null -> 1.0.0
+- Created initial constitution based on user request and codebase analysis.
+- Added Principles: Backend (Uber Style), Frontend (Wails/Vue), Language (CN/EN), Error Handling.
+- Templates requiring updates:
+  - .specify/templates/plan-template.md (✅ updated - Added Wails structure option)
+  - .specify/templates/tasks-template.md (✅ updated - Added Wails path conventions)
+-->
 
-## Core Principles
+# Project Constitution: t-log
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+## 1. Project Metadata
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+- **Project Name**: t-log
+- **Constitution Version**: 1.0.0
+- **Ratification Date**: 2025-11-27
+- **Last Amended Date**: 2025-11-27
+- **Status**: Active
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+## 2. Core Principles
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+### Principle 1: Backend Architecture & Style (Golang)
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+Adherence to the **Uber Go Style Guide** is mandatory for all Go code.
+- **Style**: Follow [Uber Go Style Guide](https://github.com/uber-go/guide/blob/master/style.md).
+- **Structure**: Strictly follow Wails best practices. Separate business logic from the Wails application binding layer where possible.
+- **Type Safety**: Enforce strict type checking. Avoid `interface{}` unless absolutely necessary.
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+### Principle 2: Frontend Architecture (Vue.js)
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+The frontend is built with **Vue.js** and **Vite**, integrated via Wails.
+- **Integration**: Use `wailsjs` runtime and binding definitions efficiently.
+- **Modularity**: Maintain a clean component hierarchy in `frontend/src/components`.
+- **State**: Use Vue reactivity appropriately.
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+### Principle 3: Language & Communication Protocol
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+Strict language separation ensures clarity for developers and consistency for logs.
+- **Comments**: MUST be in **Chinese (Simplified)**. Do not use prefixes like "中文注释:".
+- **Logs**: MUST be in **English**. Adhere to standard log levels (Info, Warn, Error, Debug).
+- **User Interaction**: The AI assistant MUST always respond in **Chinese**.
+- **Documentation**: All Speckit-generated documentation MUST be in **Chinese (Simplified)**.
 
-## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
+### Principle 4: Error Handling & Reliability
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+Reliability is paramount; failure states must be explicit.
+- **LLM Handling**: **NO fallback handling** for LLM errors. If an LLM error occurs, return the error directly to the caller/user.
+- **Go Errors**: Handle errors explicitly. Do not swallow errors. Use `if err != nil` patterns consistent with Go idioms.
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+### Principle 5: Development Workflow
+
+Focus on requested tasks without unnecessary artifact generation.
+- **Scope**: Do not proactively create example code or modify auxiliary documentation unless explicitly requested.
+- **Environment**: (If Python is ever introduced) Use system python and project-level virtual environments.
+
+## 3. Governance
+
+- **Amendments**: Changes to this constitution require user approval.
+- **Versioning**: Semantic versioning (MAJOR.MINOR.PATCH).
+    - MAJOR: Fundamental change to a core principle (e.g., switching languages).
+    - MINOR: Adding a new principle or significant section.
+    - PATCH: Wording changes or clarifications.

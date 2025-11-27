@@ -1,0 +1,24 @@
+package note
+
+import (
+	"fmt"
+	"os/exec"
+	"runtime"
+)
+
+func openFileInOS(path string) error {
+	var cmd *exec.Cmd
+
+	switch runtime.GOOS {
+	case "windows":
+		cmd = exec.Command("cmd", "/c", "start", "", path)
+	case "darwin":
+		cmd = exec.Command("open", path)
+	case "linux":
+		cmd = exec.Command("xdg-open", path)
+	default:
+		return fmt.Errorf("unsupported platform")
+	}
+
+	return cmd.Start()
+}

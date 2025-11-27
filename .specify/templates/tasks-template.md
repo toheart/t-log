@@ -22,6 +22,7 @@ description: "Task list template for feature implementation"
 
 - **Single project**: `src/`, `tests/` at repository root
 - **Web app**: `backend/src/`, `frontend/src/`
+- **Wails app**: `frontend/src/` (Vue), `app.go`/`main.go` (Root), `wailsjs/`
 - **Mobile**: `api/src/`, `ios/src/` or `android/src/`
 - Paths shown below assume single project - adjust based on plan.md structure
 
