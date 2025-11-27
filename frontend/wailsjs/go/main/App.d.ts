@@ -23,3 +23,7 @@ export function OpenNoteAt(arg1:string,arg2:number):Promise<void>;
 export function SaveNote(arg1:string):Promise<void>;
 
 export function SearchNotes(arg1:string):Promise<Array<note.SearchResult>>;
+
+export function SelectRootPath():Promise<string>;
+
+export function UpdateConfig(arg1:config.AppConfig):Promise<void>;

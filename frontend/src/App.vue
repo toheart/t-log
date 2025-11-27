@@ -3,6 +3,8 @@ import { useApp } from './composables/useApp'
 import InputArea from './components/InputArea.vue'
 import Timeline from './components/Timeline.vue'
 import CommandPalette from './components/CommandPalette.vue'
+import SettingsModal from './components/SettingsModal.vue'
+import { ref } from 'vue'
 
 const {
   inputRef,
@@ -15,6 +17,8 @@ const {
   openDailyNote,
   closeCommandPalette
 } = useApp()
+
+const settingsRef = ref(null)
 </script>
 
 <template>
@@ -37,6 +41,8 @@ const {
       :visible="isCommandPaletteVisible"
       @close="closeCommandPalette"
     />
+
+    <SettingsModal ref="settingsRef" />
   </main>
 </template>
 

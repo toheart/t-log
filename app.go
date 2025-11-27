@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"t-log/internal/command"
 	"t-log/internal/config"
+	hk "t-log/internal/hotkey"
 	"t-log/internal/note"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -41,8 +42,14 @@ func (a *App) startup(ctx context.Context) {
 	}
 
 	// Register global hotkey
-	// Default is Alt+Space.
-	a.hk = hotkey.New([]hotkey.Modifier{hotkey.ModCtrl, hotkey.ModAlt}, hotkey.KeySpace)
+	mods, key, err := hk.ParseHotkey(a.config.Hotkey)
+	if err != nil {
+		fmt.Printf("Error parsing hotkey '%s': %v. Using default Alt+Space.\n", a.config.Hotkey, err)
+		mods = []hotkey.Modifier{hotkey.ModCtrl, hotkey.ModAlt}
+		key = hotkey.KeySpace
+	}
+
+	a.hk = hotkey.New(mods, key)
 	if err := a.hk.Register(); err != nil {
 		fmt.Printf("Failed to register hotkey: %v\n", err)
 	}
@@ -108,6 +115,19 @@ func (a *App) registerCommands() {
 		// But we register it so it shows up in the list
 		return nil
 	})
+
+	// Settings
+	a.cmdRegistry.Register(command.Command{
+		ID:          "cmd:settings",
+		Title:       "Settings",
+		Description: "Open configuration settings",
+	}, func(args []string) error {
+		// The frontend CommandPalette will intercept this and handle it,
+		// OR we can emit an event here if executed via backend logic.
+		// Let's emit the event just in case.
+		runtime.EventsEmit(a.ctx, "app:open-settings")
+		return nil
+	})
 }
 
 // shutdown is called at application termination
@@ -125,6 +145,27 @@ func (a *App) Greet(name string) string {
 // GetConfig returns the current configuration
 func (a *App) GetConfig() *config.AppConfig {
 	return a.config
+}
+
+// UpdateConfig updates the application configuration
+func (a *App) UpdateConfig(cfg config.AppConfig) error {
+	a.config = &cfg
+	// In a real app, we might want to re-init things if config changes (like hotkey)
+	// For now, we just save it.
+	// Hotkey update would require unregistering old and registering new, which is complex safely.
+	// We'll assume restart required for hotkey for now, as per spec US3 test scenario "Restart".
+	return config.SaveConfig(config.ConfigFileName, a.config)
+}
+
+// SelectRootPath opens a dialog to select the root path
+func (a *App) SelectRootPath() (string, error) {
+	path, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "Select Notes Directory",
+	})
+	if err != nil {
+		return "", err
+	}
+	return path, nil
 }
 
 // SaveNote appends a new note to today's markdown file

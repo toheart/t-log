@@ -157,6 +157,14 @@ const executeSelected = async () => {
     }
     
     try {
+      // Special handling for settings command if needed locally,
+      // but backend ExecuteCommand should emit the event which App.vue listens to.
+      // However, ExecuteCommand is async. We should close the palette first?
+      // No, if we close palette, App.vue handles the rest.
+      
+      // Check if it's settings to avoid closing if we want to show modal directly?
+      // Actually, closing palette is fine because settings is a modal.
+      
       await ExecuteCommand(item.id, []);
       close();
     } catch (err) {

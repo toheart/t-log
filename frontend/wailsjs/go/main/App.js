@@ -41,3 +41,11 @@ export function SaveNote(arg1) {
 export function SearchNotes(arg1) {
   return window['go']['main']['App']['SearchNotes'](arg1);
 }
+
+export function SelectRootPath() {
+  return window['go']['main']['App']['SelectRootPath']();
+}
+
+export function UpdateConfig(arg1) {
+  return window['go']['main']['App']['UpdateConfig'](arg1);
+}

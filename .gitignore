@@ -11,3 +11,6 @@ frontend/dist
 .DS_Store
 .idea/
 .vscode/
+wailsjs/
+frontend/node_modules
+frontend/wailsjs
