@@ -1,11 +1,10 @@
 <!--
 Sync Impact Report:
-- Version change: null -> 1.0.0
-- Created initial constitution based on user request and codebase analysis.
-- Added Principles: Backend (Uber Style), Frontend (Wails/Vue), Language (CN/EN), Error Handling.
+- Version change: 1.0.0 -> 1.1.0
+- Modified Principles: Principle 2 (Frontend Architecture) expanded to enforce componentization and coding standards.
+- Added: Explicit prohibition of `App.vue` bloat; Requirement for standard Vue coding styles.
 - Templates requiring updates:
-  - .specify/templates/plan-template.md (✅ updated - Added Wails structure option)
-  - .specify/templates/tasks-template.md (✅ updated - Added Wails path conventions)
+  - None specific, but future code generation must adhere to new constraints.
 -->
 
 # Project Constitution: t-log
@@ -13,7 +12,7 @@ Sync Impact Report:
 ## 1. Project Metadata
 
 - **Project Name**: t-log
-- **Constitution Version**: 1.0.0
+- **Constitution Version**: 1.1.0
 - **Ratification Date**: 2025-11-27
 - **Last Amended Date**: 2025-11-27
 - **Status**: Active
@@ -29,10 +28,11 @@ Adherence to the **Uber Go Style Guide** is mandatory for all Go code.
 
 ### Principle 2: Frontend Architecture (Vue.js)
 
-The frontend is built with **Vue.js** and **Vite**, integrated via Wails.
+The frontend is built with **Vue.js** and **Vite**, integrated via Wails. Modular component design is non-negotiable.
+- **Componentization**: **Logic and UI MUST be encapsulated into dedicated components**. `App.vue` acts only as the root layout/container. Avoid monolithic "God Objects" in `App.vue`.
+- **Coding Standards**: Follow standard Vue.js style guide (Priority A & B). Use `<script setup>` syntax. Keep templates simple and move complex logic to composition API or separate files.
 - **Integration**: Use `wailsjs` runtime and binding definitions efficiently.
-- **Modularity**: Maintain a clean component hierarchy in `frontend/src/components`.
-- **State**: Use Vue reactivity appropriately.
+- **State**: Use Vue reactivity (`ref`, `reactive`, `computed`) appropriately. Centralize complex state (e.g., State Machine) rather than scattering booleans.
 
 ### Principle 3: Language & Communication Protocol
 

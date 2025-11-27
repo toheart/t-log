@@ -13,6 +13,10 @@ const editorRef = ref(null)
 const previewContent = ref('')
 let view = null
 
+const props = defineProps({
+  isOpeningFile: Boolean
+})
+
 // Configure marked
 marked.setOptions({
   gfm: true,
@@ -139,14 +143,23 @@ const insertLink = (view) => {
 
 // Custom keymap
 const customKeymap = [
-  { key: 'Enter', run: (view) => {
+  { key: 'Tab', run: (view) => {
+      view.dispatch(view.state.replaceSelection('    '))
+      return true
+  }},
+  { key: 'Ctrl-Enter', run: (view) => {
       const content = view.state.doc.toString()
       emit('save', content)
       view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: '' } })
       return true
     }
   },
-  { key: 'Shift-Enter', run: () => false },
+  { key: 'Enter', run: (view) => {
+      view.dispatch(view.state.replaceSelection('\n'))
+      return true
+    }
+  },
+  { key: 'Shift-Enter', run: () => false }, // Default behavior is fine, or map to newline too
   { key: 'Escape', run: () => { emit('cancel'); return true } },
   
   // Formatting
@@ -267,11 +280,16 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="hint">
-      <span>↵ save</span>
-      <span>⇧+↵ newline</span>
+      <span>Ctrl+↵ save</span>
+      <span>↵ newline</span>
       <span>Esc cancel</span>
       <span>Ctrl+B bold</span>
+      <span>Ctrl+I italic</span>
+      <span>Ctrl+K link</span>
+      <span>Ctrl+E code</span>
       <span>Ctrl+1..6 H1-6</span>
+      <span>Ctrl+Shift+8 list</span>
+      <span v-if="isOpeningFile" class="status-opening">Opening file...</span>
     </div>
   </div>
 </template>
@@ -330,6 +348,19 @@ onBeforeUnmount(() => {
   color: rgba(128, 128, 128, 0.8);
   flex-wrap: wrap;
   margin-top: auto; /* Push to bottom */
+}
+
+.status-opening {
+  color: #007acc;
+  font-weight: bold;
+  animation: pulse 1.5s infinite;
+  margin-left: auto; /* Push to the right */
+}
+
+@keyframes pulse {
+  0% { opacity: 0.6; }
+  50% { opacity: 1; }
+  100% { opacity: 0.6; }
 }
 
 /* Markdown Styles (Copied from Timeline for consistency) */

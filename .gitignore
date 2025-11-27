@@ -3,3 +3,11 @@ node_modules
 frontend/dist
 /specs
 /data
+*.exe
+*.test
+*.out
+*.log
+.env*
+.DS_Store
+.idea/
+.vscode/
