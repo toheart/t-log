@@ -4,6 +4,11 @@ import (
 	"context"
 	"embed"
 
+	"net/http"
+	"path/filepath"
+	"strings"
+	"t-log/internal/config"
+
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/menu"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -36,6 +41,47 @@ func main() {
 	}))
 
 	// Create application with options
+
+	// Custom asset handler to serve attachments
+	// Intercepts /attachments/ and serves from Config.RootPath
+	// Note: We need to load config briefly here or rely on the fact that
+	// main.go initializes the App which loads config. But AssetServer needs
+	// the handler BEFORE App.startup is called.
+	// Ideally, we load config first.
+
+	cfg, _ := config.LoadConfig() // If error, we might default or fail. Using ignore for now as App.startup reloads it.
+	// But we NEED the path for the handler closure.
+	// If LoadConfig fails here (e.g. first run), RootPath might be "QuickNotes" relative or empty.
+	// Let's rely on the same logic as App.startup to get a usable path if possible.
+	if cfg == nil {
+		cfg = config.DefaultConfig() // Fallback
+	}
+
+	assetHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/attachments/") {
+			// Expected path: /attachments/YYYY/MM/Attachment/file.ext
+			// Physical path: {RootPath}/YYYY/MM/Attachment/file.ext
+			relativePath := strings.TrimPrefix(r.URL.Path, "/attachments/")
+
+			// Security check: prevent directory traversal
+			// Join cleans the path, but we should ensure it's within RootPath
+			fullPath := filepath.Join(cfg.RootPath, relativePath)
+
+			// Basic check to ensure we are serving files, not arbitrary system paths
+			// (filepath.Join handles .. cleaning, but we trust RootPath is safe)
+			http.ServeFile(w, r, fullPath)
+			return
+		}
+		// Default handler (Wails assets)
+		// Wails doesn't expose the "next" handler easily in the Options struct
+		// Wait, AssetServer.Handler IS the fallback? No, it INTERCEPTS.
+		// If we don't handle it, what happens?
+		// "If the handler returns a status code of 404, Wails will try to find the asset in the assets FS."
+		// So we just return 404 if not matched?
+		// Actually, `http.NotFound(w, r)` is the standard way.
+		http.NotFound(w, r)
+	})
+
 	err := wails.Run(&options.App{
 		Title:       "Quick Capture",
 		Width:       400,
@@ -44,9 +90,21 @@ func main() {
 		Frameless:   true,
 		AlwaysOnTop: true,
 		AssetServer: &assetserver.Options{
-			Assets: assets,
+			Assets:  assets,
+			Handler: assetHandler,
 		},
 		BackgroundColour: &options.RGBA{R: 0, G: 0, B: 0, A: 0},
+		SingleInstanceLock: &options.SingleInstanceLock{
+			UniqueId: "t-log-quick-capture-single-instance",
+			OnSecondInstanceLaunch: func(secondInstanceData options.SecondInstanceData) {
+				// Show window when second instance is launched
+				runtime.WindowShow(app.ctx)
+				if runtime.WindowIsMinimised(app.ctx) {
+					runtime.WindowUnminimise(app.ctx)
+				}
+				runtime.WindowSetAlwaysOnTop(app.ctx, true)
+			},
+		},
 		OnStartup: func(ctx context.Context) {
 			app.startup(ctx)
 		},

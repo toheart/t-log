@@ -27,3 +27,5 @@ export function SearchNotes(arg1:string):Promise<Array<note.SearchResult>>;
 export function SelectRootPath():Promise<string>;
 
 export function UpdateConfig(arg1:config.AppConfig):Promise<void>;
+
+export function UploadAttachment(arg1:Array<number>,arg2:string):Promise<string>;

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"t-log/internal/attachment"
 	"t-log/internal/command"
 	"t-log/internal/config"
 	hk "t-log/internal/hotkey"
@@ -18,6 +19,7 @@ type App struct {
 	config      *config.AppConfig
 	hk          *hotkey.Hotkey
 	cmdRegistry *command.CommandRegistry
+	attachMgr   *attachment.Manager
 }
 
 // NewApp creates a new App application struct
@@ -40,6 +42,9 @@ func (a *App) startup(ctx context.Context) {
 	} else {
 		a.config = cfg
 	}
+
+	// Initialize managers
+	a.attachMgr = attachment.NewManager(a.config)
 
 	// Register global hotkey
 	mods, key, err := hk.ParseHotkey(a.config.Hotkey)
@@ -218,4 +223,9 @@ func (a *App) SearchNotes(query string) []note.SearchResult {
 		return []note.SearchResult{}
 	}
 	return results
+}
+
+// UploadAttachment saves the provided content as a file in the attachment directory
+func (a *App) UploadAttachment(content []byte, filename string) (string, error) {
+	return a.attachMgr.SaveAttachment(content, filename)
 }

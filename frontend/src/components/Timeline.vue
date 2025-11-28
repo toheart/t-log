@@ -144,6 +144,15 @@ const groupedNotes = computed(() => {
 :deep(.markdown-body) {
   font-size: 0.95rem;
 }
+/* Image Styles */
+:deep(.markdown-body img) {
+  max-width: 100%;
+  max-height: 300px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin: 4px 0;
+  display: block;
+}
 :deep(.markdown-body p) {
   margin: 0; /* Remove default p margins */
 }

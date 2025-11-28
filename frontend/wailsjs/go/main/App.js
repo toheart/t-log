@@ -49,3 +49,7 @@ export function SelectRootPath() {
 export function UpdateConfig(arg1) {
   return window['go']['main']['App']['UpdateConfig'](arg1);
 }
+
+export function UploadAttachment(arg1, arg2) {
+  return window['go']['main']['App']['UploadAttachment'](arg1, arg2);
+}

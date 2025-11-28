@@ -7,10 +7,12 @@ import { standardKeymap, history, historyKeymap } from '@codemirror/commands'
 import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
+import { UploadAttachment } from '../../wailsjs/go/main/App'
 
 const emit = defineEmits(['save', 'cancel'])
 const editorRef = ref(null)
 const previewContent = ref('')
+const isUploading = ref(false)
 let view = null
 
 const props = defineProps({
@@ -228,6 +230,94 @@ const focus = () => {
 
 defineExpose({ focus })
 
+// Handle Paste Event
+const handlePaste = async (event, view) => {
+  const items = event.clipboardData?.items
+  if (!items) return false
+
+  for (const item of items) {
+    // Handle Images
+    if (item.type.indexOf('image') !== -1) {
+      event.preventDefault()
+      const file = item.getAsFile()
+      if (!file) continue
+      
+      if (file.size > 50 * 1024 * 1024) { // 50MB limit
+             alert(`Image ${file.name} exceeds 50MB limit.`)
+             continue
+      }
+
+      // Upload logic
+      try {
+        isUploading.value = true
+        const arrayBuffer = await file.arrayBuffer()
+        const uint8Array = new Uint8Array(arrayBuffer)
+        const array = Array.from(uint8Array)
+        
+        const webPath = await UploadAttachment(array, file.name || 'image.png')
+        
+        // Insert Markdown
+        const md = `![image](${webPath})`
+        view.dispatch(view.state.replaceSelection(md))
+      } catch (err) {
+        console.error('Failed to upload image:', err)
+      } finally {
+        isUploading.value = false
+      }
+      return true
+    }
+  }
+  
+  // Handle Files (Non-Image)
+  if (event.clipboardData?.files?.length > 0) {
+    event.preventDefault()
+    isUploading.value = true
+    
+    // Process files sequentially or parallel? 
+    // Sequential for safety and cursor position
+    const processFiles = async () => {
+        try {
+            for (const file of event.clipboardData.files) {
+                // If it's an image, it might be caught by items above, but if pasted as file from explorer
+                // it comes here.
+                const isImage = file.type.indexOf('image') !== -1
+                
+                if (file.size > 50 * 1024 * 1024) { // 50MB limit
+                     alert(`File ${file.name} exceeds 50MB limit.`)
+                     continue
+                }
+        
+                try {
+                  const arrayBuffer = await file.arrayBuffer()
+                  const uint8Array = new Uint8Array(arrayBuffer)
+                  const array = Array.from(uint8Array)
+                  
+                  const webPath = await UploadAttachment(array, file.name)
+                  
+                  let md = ''
+                  if (isImage) {
+                     md = `![${file.name}](${webPath})`
+                  } else {
+                     md = `[${file.name}](${webPath})`
+                  }
+                  
+                  view.dispatch(view.state.replaceSelection(md + ' '))
+                } catch (err) {
+                  console.error('Failed to upload file:', err)
+                }
+            }
+        } finally {
+            isUploading.value = false
+        }
+    }
+    
+    processFiles()
+    return true
+  }
+  
+  return false
+}
+
 onMounted(() => {
   if (!editorRef.value) return
 
@@ -242,6 +332,13 @@ onMounted(() => {
       }
     }
   })
+  
+  // DOM Event Handler for Paste
+  const domEventHandler = EditorView.domEventHandlers({
+    paste: (event, view) => {
+      return handlePaste(event, view)
+    }
+  })
 
   const state = EditorState.create({
     doc: '',
@@ -253,7 +350,8 @@ onMounted(() => {
       minimalTheme,
       placeholder('Type your thought...'),
       EditorView.lineWrapping,
-      updateListener
+      updateListener,
+      domEventHandler
     ]
   })
 
@@ -287,9 +385,11 @@ onBeforeUnmount(() => {
       <span>Ctrl+I italic</span>
       <span>Ctrl+K link</span>
       <span>Ctrl+E code</span>
+      <span>Ctrl+V paste img</span>
       <span>Ctrl+1..6 H1-6</span>
       <span>Ctrl+Shift+8 list</span>
       <span v-if="isOpeningFile" class="status-opening">Opening file...</span>
+      <span v-if="isUploading" class="status-opening">Uploading...</span>
     </div>
   </div>
 </template>
@@ -308,8 +408,9 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: row;
   gap: 10px;
-  /* Fixed height for the editor area to ensure stability */
-  height: 120px; 
+  /* Fill available height */
+  flex: 1; 
+  min-height: 0;
 }
 
 .editor-container {
