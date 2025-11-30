@@ -1,5 +1,5 @@
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import { SaveNote, HideWindow, GetRecentNotes, OpenDailyNote } from '../../wailsjs/go/main/App'
+import { SaveNote, HideWindow, GetRecentNotes, OpenDailyNote, OpenDateNote } from '../../wailsjs/go/main/App'
 import { WindowSetSize, EventsOn } from '../../wailsjs/runtime/runtime'
 
 // State Constants
@@ -89,6 +89,25 @@ export function useApp() {
       }
       return
     }
+    
+    // Slash command: open YYYY-MM-DD
+    if (trimmed.startsWith('open ')) {
+        const dateStr = trimmed.substring(5).trim()
+        // Simple regex check for YYYY-MM-DD
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+            appState.activity = ActivityState.OPENING
+            try {
+                await OpenDateNote(dateStr)
+                await hideAndReset()
+            } catch (error) {
+                console.error('Failed to open date note:', error)
+                // Maybe show error in UI? For now console.
+            } finally {
+                appState.activity = ActivityState.IDLE
+            }
+            return
+        }
+    }
 
     try {
       await SaveNote(content)
@@ -148,10 +167,10 @@ export function useApp() {
     })
   }
 
-  const handleBlur = () => {
-    if (appState.activity !== ActivityState.IDLE || isCommandPaletteVisible.value) return
-    hideAndReset()
-  }
+  // const handleBlur = () => {
+  //   if (appState.activity !== ActivityState.IDLE || isCommandPaletteVisible.value) return
+  //   hideAndReset()
+  // }
 
   // Lifecycle
   onMounted(() => {
@@ -160,7 +179,7 @@ export function useApp() {
 
     window.addEventListener('keydown', handleKeydown)
     window.addEventListener('focus', handleFocus)
-    window.addEventListener('blur', handleBlur)
+    // window.addEventListener('blur', handleBlur)
 
     resetEventCancel = EventsOn("app:reset", () => {
       nextTick(() => {
@@ -175,7 +194,7 @@ export function useApp() {
   onUnmounted(() => {
     window.removeEventListener('keydown', handleKeydown)
     window.removeEventListener('focus', handleFocus)
-    window.removeEventListener('blur', handleBlur)
+    // window.removeEventListener('blur', handleBlur)
     if (resetEventCancel) {
       resetEventCancel()
     }

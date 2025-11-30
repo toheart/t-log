@@ -3,9 +3,11 @@ package note
 import (
 	"bufio"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 )
@@ -151,4 +153,44 @@ func OpenDailyNote(rootPath string) error {
 
 	// Use 'open' command equivalent
 	return openFileInOS(filePath)
+}
+
+// ListNoteDates returns a list of all available note dates (YYYY-MM-DD)
+func ListNoteDates(rootPath string) ([]string, error) {
+	var dates []string
+
+	// Walk the root path
+	err := filepath.WalkDir(rootPath, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			// Skip hidden directories if any, or Attachment directory
+			if d.Name() == "Attachment" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		// Check if file matches YYYY-MM-DD.md
+		name := d.Name()
+		if strings.HasSuffix(name, ".md") {
+			// Simple validation: length is 10+3=13 chars?
+			// Better: regex check
+			datePart := strings.TrimSuffix(name, ".md")
+			if _, err := time.Parse("2006-01-02", datePart); err == nil {
+				dates = append(dates, datePart)
+			}
+		}
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Sort reverse chronological
+	sort.Sort(sort.Reverse(sort.StringSlice(dates)))
+
+	return dates, nil
 }

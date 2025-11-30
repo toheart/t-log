@@ -235,10 +235,14 @@ const handlePaste = async (event, view) => {
   const items = event.clipboardData?.items
   if (!items) return false
 
+  // Check if we have files to handle
+  let hasHandledContent = false
+
   for (const item of items) {
     // Handle Images
     if (item.type.indexOf('image') !== -1) {
       event.preventDefault()
+      hasHandledContent = true
       const file = item.getAsFile()
       if (!file) continue
       
@@ -269,17 +273,20 @@ const handlePaste = async (event, view) => {
   }
   
   // Handle Files (Non-Image)
-  if (event.clipboardData?.files?.length > 0) {
+  // Check if there are files AND it's not just plain text content being pasted as file
+  // Sometimes text is also available as file.
+  // But usually event.clipboardData.files is empty for pure text.
+  if (event.clipboardData?.files?.length > 0 && !hasHandledContent) {
+    // Double check if it is text?
+    // If I copy text "abc", files is usually empty.
+    // If I copy a file from explorer, files has length 1.
+    
     event.preventDefault()
     isUploading.value = true
     
-    // Process files sequentially or parallel? 
-    // Sequential for safety and cursor position
     const processFiles = async () => {
         try {
             for (const file of event.clipboardData.files) {
-                // If it's an image, it might be caught by items above, but if pasted as file from explorer
-                // it comes here.
                 const isImage = file.type.indexOf('image') !== -1
                 
                 if (file.size > 50 * 1024 * 1024) { // 50MB limit
@@ -315,6 +322,7 @@ const handlePaste = async (event, view) => {
     return true
   }
   
+  // Default behavior for text
   return false
 }
 
@@ -333,10 +341,65 @@ onMounted(() => {
     }
   })
   
-  // DOM Event Handler for Paste
   const domEventHandler = EditorView.domEventHandlers({
     paste: (event, view) => {
-      return handlePaste(event, view)
+      // Wait, handlePaste is async. CodeMirror expects return bool immediately.
+      // If we return false, default happens.
+      // But handlePaste might decide later it was a file?
+      // Actually handlePaste preventsDefault synchronously if it finds a file.
+      // The async part is the upload.
+      // So we can just call it.
+      
+      const result = handlePaste(event, view)
+      // If handlePaste returns a Promise (because async), we can't use its return value directly for sync prevention.
+      // But handlePaste calls event.preventDefault() internally if matches.
+      // So we just return false generally? Or rely on event default prevented?
+      
+      // CodeMirror logic: "If a handler returns true, the event is assumed to be handled..."
+      // We need to detect if we handled it.
+      
+      // Fix: handlePaste is async, so it returns a Promise.
+      // We need to check items synchronously.
+      // Let's make handlePaste synchronous in decision making, async in execution.
+      // But `item.getAsFile()` is sync.
+      // The issue is `await handlePaste` isn't possible here.
+      
+      // We can refactor handlePaste to NOT be async wrapper, but fire async operations.
+      // But for now, let's just rely on the fact that we call preventDefault() inside.
+      // However, if we return false (because it's a promise object), CM might try to handle it too?
+      // If preventDefault is called, CM usually respects it.
+      
+      // Let's see. Promise object is truthy? Yes.
+      // So if we return handlePaste(), we are returning true (Promise).
+      // This prevents CM default paste! Even for text!
+      // THIS IS THE BUG.
+      
+      // We must ONLY return true if we actually found a file/image.
+      // But we can't know that from the Promise result immediately unless we peek.
+      
+      // Refactor: Check synchronously.
+      const items = event.clipboardData?.items
+      if (!items) return false
+      
+      let isCustom = false
+      // Check for images
+      for (const item of items) {
+          if (item.type.indexOf('image') !== -1) {
+              isCustom = true
+              break
+          }
+      }
+      // Check for files (if not image item found)
+      if (!isCustom && event.clipboardData?.files?.length > 0) {
+          isCustom = true
+      }
+      
+      if (isCustom) {
+          handlePaste(event, view) // Fire and forget async
+          return true // Tell CM we handled it
+      }
+      
+      return false // Tell CM to handle it (Text)
     }
   })
 

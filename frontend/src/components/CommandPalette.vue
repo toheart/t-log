@@ -37,7 +37,7 @@
 
 <script setup>
 import { ref, computed, onMounted, nextTick, watch } from 'vue';
-import { GetCommands, ExecuteCommand, SearchNotes, OpenNoteAt } from '../../wailsjs/go/main/App';
+import { GetCommands, ExecuteCommand, SearchNotes, OpenNoteAt, ListNoteDates, OpenDateNote } from '../../wailsjs/go/main/App';
 
 const props = defineProps({
   visible: Boolean
@@ -50,18 +50,28 @@ const searchQuery = ref('');
 const selectedIndex = ref(0);
 const commands = ref([]);
 const searchResults = ref([]);
-const mode = ref('command'); // 'command' or 'search'
+const noteDates = ref([]);
+const mode = ref('command'); // 'command', 'search', 'date-picker'
 let searchTimeout = null; // For debounce
 
 // Computed placeholder based on mode
 const placeholder = computed(() => {
-  return mode.value === 'search' ? 'Search notes...' : 'Type a command...';
+  if (mode.value === 'search') return 'Search notes...';
+  if (mode.value === 'date-picker') return 'Select date... (YYYY-MM-DD)';
+  return 'Type a command...';
 });
 
 // Computed items to display
 const filteredItems = computed(() => {
   if (mode.value === 'search') {
     return searchResults.value;
+  }
+  if (mode.value === 'date-picker') {
+    if (!searchQuery.value) return noteDates.value.map(d => ({ title: d, id: d }));
+    const query = searchQuery.value.toLowerCase();
+    return noteDates.value
+      .filter(d => d.includes(query))
+      .map(d => ({ title: d, id: d }));
   }
   
   // Command mode: filter commands by query
@@ -90,6 +100,14 @@ const loadCommands = async () => {
     commands.value = await GetCommands();
   } catch (err) {
     console.error('Failed to load commands:', err);
+  }
+};
+
+const loadNoteDates = async () => {
+  try {
+    noteDates.value = await ListNoteDates() || [];
+  } catch (err) {
+    console.error('Failed to load note dates:', err);
   }
 };
 
@@ -125,6 +143,19 @@ const handleInput = async () => {
     searchQuery.value = ''; // Clear query for actual search term
     return;
   }
+  
+  // Check for open date trigger by typing 'open '
+  if (mode.value === 'command' && searchQuery.value.startsWith('open ')) {
+    // Optional: automatically switch to date picker if they type 'open '
+    // But maybe they want to see commands starting with open first?
+    // If we switch, we lose the command list.
+    // Let's keep command list, but if they select "Open Date...", we switch.
+    // OR, if they type 'open ', we can assume intention.
+    // For now, let's stick to selecting the command to switch mode, 
+    // OR allow 'open ' to filter commands, and if no command matches exactly, maybe?
+    // User requirement: "open command should be able to output search... after selection"
+    // So we rely on selection.
+  }
 
   // Handle search mode
   if (mode.value === 'search') {
@@ -156,6 +187,13 @@ const executeSelected = async () => {
       return;
     }
     
+    if (item.id === 'cmd:open-date') {
+      mode.value = 'date-picker';
+      searchQuery.value = '';
+      await loadNoteDates();
+      return;
+    }
+    
     try {
       // Special handling for settings command if needed locally,
       // but backend ExecuteCommand should emit the event which App.vue listens to.
@@ -169,6 +207,14 @@ const executeSelected = async () => {
       close();
     } catch (err) {
       console.error('Command execution failed:', err);
+    }
+  } else if (mode.value === 'date-picker') {
+    // Handle date selection
+    try {
+        await OpenDateNote(item.id); // item.id is the date string
+        close();
+    } catch (err) {
+        console.error('Failed to open date note:', err);
     }
   } else {
     // Handle search result selection

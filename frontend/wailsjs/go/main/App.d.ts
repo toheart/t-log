@@ -16,7 +16,11 @@ export function Greet(arg1:string):Promise<string>;
 
 export function HideWindow():Promise<void>;
 
+export function ListNoteDates():Promise<Array<string>>;
+
 export function OpenDailyNote():Promise<void>;
+
+export function OpenDateNote(arg1:string):Promise<void>;
 
 export function OpenNoteAt(arg1:string,arg2:number):Promise<void>;
 

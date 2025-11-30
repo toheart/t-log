@@ -26,8 +26,16 @@ export function HideWindow() {
   return window['go']['main']['App']['HideWindow']();
 }
 
+export function ListNoteDates() {
+  return window['go']['main']['App']['ListNoteDates']();
+}
+
 export function OpenDailyNote() {
   return window['go']['main']['App']['OpenDailyNote']();
+}
+
+export function OpenDateNote(arg1) {
+  return window['go']['main']['App']['OpenDateNote'](arg1);
 }
 
 export function OpenNoteAt(arg1, arg2) {

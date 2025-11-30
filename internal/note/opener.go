@@ -2,8 +2,11 @@ package note
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
+	"time"
 )
 
 func openFileInOS(path string) error {
@@ -45,4 +48,35 @@ func OpenNoteAt(path string, lineNo int) error {
 
 	// Fallback: just open the file
 	return openFileInOS(path)
+}
+
+// OpenDateNote opens the markdown file for a specific date
+// dateStr should be in "YYYY-MM-DD" format
+func OpenDateNote(rootPath, dateStr string) error {
+	// Validate date format
+	t, err := time.Parse("2006-01-02", dateStr)
+	if err != nil {
+		return fmt.Errorf("invalid date format, use YYYY-MM-DD: %w", err)
+	}
+
+	year := t.Format("2006")
+	month := t.Format("01")
+	filename := t.Format("2006-01-02") + ".md"
+
+	// Path: root/2006/01/2006-01-02.md
+	filePath := filepath.Join(rootPath, year, month, filename)
+
+	// Check if file exists
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		// Ensure directory exists
+		if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
+			return fmt.Errorf("failed to create directory: %w", err)
+		}
+		// Create empty file if not exists
+		if f, err := os.Create(filePath); err == nil {
+			f.Close()
+		}
+	}
+
+	return openFileInOS(filePath)
 }

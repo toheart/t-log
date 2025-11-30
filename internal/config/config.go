@@ -11,7 +11,7 @@ type AppConfig struct {
 func DefaultConfig() *AppConfig {
 	return &AppConfig{
 		RootPath:    "QuickNotes", // Will be relative to user home if not absolute
-		Hotkey:      "Alt+Space",
+		Hotkey:      "Ctrl+Alt+Space",
 		HistoryDays: 3,
 	}
 }

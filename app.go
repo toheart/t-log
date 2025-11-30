@@ -9,6 +9,8 @@ import (
 	hk "t-log/internal/hotkey"
 	"t-log/internal/note"
 
+	"time"
+
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"golang.design/x/hotkey"
 )
@@ -72,7 +74,14 @@ func (a *App) startup(ctx context.Context) {
 			if runtime.WindowIsMinimised(a.ctx) {
 				runtime.WindowUnminimise(a.ctx)
 			}
+			// Flash Top: Set AlwaysOnTop to bring to front, then disable it
+			// This allows the user to Alt-Tab away or click other windows later.
 			runtime.WindowSetAlwaysOnTop(a.ctx, true)
+			go func() {
+				time.Sleep(100 * time.Millisecond) // Short delay to ensure it pops up
+				runtime.WindowSetAlwaysOnTop(a.ctx, false)
+			}()
+
 			// Delay event emission slightly to ensure window is fully rendered
 			// This helps with the "flash crash" on some Windows systems
 			go func() {
@@ -90,13 +99,15 @@ func (a *App) startup(ctx context.Context) {
 
 // registerCommands registers all available commands
 func (a *App) registerCommands() {
-	// Open Current Day
+	// Open Specific Date
 	a.cmdRegistry.Register(command.Command{
-		ID:          "cmd:open-today",
-		Title:       "Open Current MD",
-		Description: "Open today's markdown file in default editor",
+		ID:          "cmd:open-date",
+		Title:       "Open Date...",
+		Description: "Select a specific date to open",
 	}, func(args []string) error {
-		return a.OpenDailyNote()
+		// This command is handled by frontend to show date picker
+		// But we register it so it appears in the list
+		return nil
 	})
 
 	// Help
@@ -193,6 +204,11 @@ func (a *App) OpenDailyNote() error {
 	return note.OpenDailyNote(a.config.RootPath)
 }
 
+// OpenDateNote opens the markdown file for a specific date (YYYY-MM-DD)
+func (a *App) OpenDateNote(dateStr string) error {
+	return note.OpenDateNote(a.config.RootPath, dateStr)
+}
+
 // OpenNoteAt opens a specific note file at a specific line number
 func (a *App) OpenNoteAt(filePath string, lineNo int) error {
 	return note.OpenNoteAt(filePath, lineNo)
@@ -228,4 +244,9 @@ func (a *App) SearchNotes(query string) []note.SearchResult {
 // UploadAttachment saves the provided content as a file in the attachment directory
 func (a *App) UploadAttachment(content []byte, filename string) (string, error) {
 	return a.attachMgr.SaveAttachment(content, filename)
+}
+
+// ListNoteDates returns a list of all available note dates
+func (a *App) ListNoteDates() ([]string, error) {
+	return note.ListNoteDates(a.config.RootPath)
 }
