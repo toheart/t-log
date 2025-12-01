@@ -44,6 +44,20 @@ export namespace config {
 
 export namespace note {
 	
+	export class DailyNote {
+	    date: string;
+	    content: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new DailyNote(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.date = source["date"];
+	        this.content = source["content"];
+	    }
+	}
 	export class NoteEntry {
 	    content: string;
 	    timestamp: string;

@@ -50,44 +50,95 @@ func SaveNote(rootPath, content string) error {
 }
 
 // GetRecentNotes reads notes from the last n days
-func GetRecentNotes(rootPath string, n int) ([]NoteEntry, error) {
-	var entries []NoteEntry
+func GetRecentNotes(rootPath string, n int) ([]DailyNote, error) {
 	now := time.Now()
+	// Start date is Today - (n-1) days
+	startDate := now.AddDate(0, 0, -(n - 1))
+	return GetDailyNotes(rootPath, startDate.Format("2006-01-02"), now.Format("2006-01-02"))
+}
 
-	// Check last N days
-	for i := 0; i < n; i++ {
-		date := now.AddDate(0, 0, -i)
-		year := date.Format("2006")
-		month := date.Format("01")
-		day := date.Format("2006-01-02")
+// GetNotesByDateRange reads notes within a start and end date range (inclusive)
+// start, end format: YYYY-MM-DD
+func GetNotesByDateRange(rootPath, start, end string) ([]NoteEntry, error) {
+	startDate, err := time.Parse("2006-01-02", start)
+	if err != nil {
+		return nil, fmt.Errorf("invalid start date: %w", err)
+	}
+	endDate, err := time.Parse("2006-01-02", end)
+	if err != nil {
+		return nil, fmt.Errorf("invalid end date: %w", err)
+	}
+
+	var entries []NoteEntry
+
+	// Iterate from end date down to start date to keep reverse chronological order by day
+	// Or iterate start to end?
+	// Existing GetRecentNotes does newest first (reverse chronological).
+	// Let's stick to reverse chronological (newest notes first).
+
+	current := endDate
+	for !current.Before(startDate) {
+		year := current.Format("2006")
+		month := current.Format("01")
+		day := current.Format("2006-01-02")
 
 		filename := fmt.Sprintf("%s.md", day)
 		filePath := filepath.Join(rootPath, year, month, filename)
 
 		dayEntries, err := parseNoteFile(filePath, day)
-		if err != nil {
-			if os.IsNotExist(err) {
-				continue // Skip if file doesn't exist
+		if err == nil {
+			// Reverse dayEntries to have newest time first
+			for j := len(dayEntries) - 1; j >= 0; j-- {
+				entries = append(entries, dayEntries[j])
 			}
-			// Log error but continue? Or return?
-			// For MVP let's skip unreadable files
-			continue
+		} else if !os.IsNotExist(err) {
+			// Log error?
 		}
 
-		// Prepend to keep newest overall first, but parseNoteFile returns file order (oldest to newest in file).
-		// We want the Timeline to usually show newest at top.
-		// Let's append all and sort later or handle display order in frontend.
-		// Usually daily logs are chronological.
-		// If we iterate days backwards (Today, Yesterday...), and parse file (09:00, 10:00...),
-		// We get: [Today 09:00, Today 10:00, Yesterday 09:00...]
-		// If we want strictly reverse chronological:
-		// Reverse dayEntries then append.
-		for j := len(dayEntries) - 1; j >= 0; j-- {
-			entries = append(entries, dayEntries[j])
-		}
+		current = current.AddDate(0, 0, -1)
 	}
 
 	return entries, nil
+}
+
+// GetDailyNotes reads full file contents within a start and end date range (inclusive)
+// Returns parsed DailyNote structs
+func GetDailyNotes(rootPath, start, end string) ([]DailyNote, error) {
+	startDate, err := time.Parse("2006-01-02", start)
+	if err != nil {
+		return nil, fmt.Errorf("invalid start date: %w", err)
+	}
+	endDate, err := time.Parse("2006-01-02", end)
+	if err != nil {
+		return nil, fmt.Errorf("invalid end date: %w", err)
+	}
+
+	var notes []DailyNote
+
+	// Iterate from end date down to start date (newest first)
+	current := endDate
+	for !current.Before(startDate) {
+		year := current.Format("2006")
+		month := current.Format("01")
+		day := current.Format("2006-01-02")
+
+		filename := fmt.Sprintf("%s.md", day)
+		filePath := filepath.Join(rootPath, year, month, filename)
+
+		contentBytes, err := os.ReadFile(filePath)
+		if err == nil {
+			notes = append(notes, DailyNote{
+				Date:    day,
+				Content: string(contentBytes),
+			})
+		} else if !os.IsNotExist(err) {
+			// Log error?
+		}
+
+		current = current.AddDate(0, 0, -1)
+	}
+
+	return notes, nil
 }
 
 var noteLineRegex = regexp.MustCompile(`^- \[(\d{2}:\d{2})\] (.*)$`)

@@ -14,6 +14,14 @@ export function GetConfig() {
   return window['go']['main']['App']['GetConfig']();
 }
 
+export function GetDailyNotes(arg1, arg2) {
+  return window['go']['main']['App']['GetDailyNotes'](arg1, arg2);
+}
+
+export function GetNotesByDateRange(arg1, arg2) {
+  return window['go']['main']['App']['GetNotesByDateRange'](arg1, arg2);
+}
+
 export function GetRecentNotes() {
   return window['go']['main']['App']['GetRecentNotes']();
 }

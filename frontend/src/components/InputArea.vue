@@ -9,11 +9,21 @@ import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { UploadAttachment } from '../../wailsjs/go/main/App'
 
-const emit = defineEmits(['save', 'cancel'])
+const emit = defineEmits(['save', 'cancel', 'command'])
 const editorRef = ref(null)
 const previewContent = ref('')
 const isUploading = ref(false)
 let view = null
+
+// Command Suggestions
+const showCommandSuggestions = ref(false)
+const selectedSuggestionIndex = ref(0)
+const suggestions = [
+  { label: '/today', desc: '查看今日日志 (List)' },
+  { label: '/week', desc: '导出本周日志 (Export)' },
+  { label: '/month', desc: '导出本月日志 (Export)' },
+  { label: '/list', desc: '查看今日日志 (同 /today)' }
+]
 
 const props = defineProps({
   isOpeningFile: Boolean
@@ -68,9 +78,6 @@ const setHeading = (level) => {
       if (match) {
         // Replace existing heading
         if (match[1].length === level) {
-             // Toggle off if same level? Usually typora just keeps it or changes it.
-             // Let's make it strictly "Set" per shortcut, maybe toggle if same?
-             // Typora behavior: Ctrl+1 on H1 -> Body text.
              change = { from: line.from, to: line.from + match[0].length, insert: '' }
         } else {
              change = { from: line.from, to: line.from + match[0].length, insert: targetPrefix }
@@ -82,9 +89,7 @@ const setHeading = (level) => {
 
       return {
         changes: [change],
-        range: range // Keep relative position? range.map(change) handled by CM?
-                     // Actually simpler to just return range. 
-                     // For line changes, keeping cursor in place is default behavior of state.update
+        range: range 
       }
     })
     dispatch(changes)
@@ -100,15 +105,7 @@ const toggleLinePrefix = (prefix) => {
       const line = state.doc.lineAt(range.from)
       const text = line.text
       
-      // Check if line already starts with prefix (ignoring whitespace)
-      // Using simple startsWith for MVP, or regex if needed
-      // Task list: "- [ ] "
-      // Unordered: "- " or "* "
-      // Ordered: "1. " (regex needed for d.)
-      
       let change
-      // Handle dynamic regex for ordered list "1. " vs "2. " etc? 
-      // Typora shortcut creates "1. ".
       
       if (text.startsWith(prefix)) {
         // Remove
@@ -143,26 +140,75 @@ const insertLink = (view) => {
     return true
 }
 
+const selectCommand = (index) => {
+  if (!view) return
+  const cmd = suggestions[index].label
+  view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: cmd + ' ' }
+  })
+  // Move cursor to end
+  view.dispatch({ selection: { anchor: cmd.length + 1 } })
+  showCommandSuggestions.value = false
+}
+
 // Custom keymap
 const customKeymap = [
   { key: 'Tab', run: (view) => {
       view.dispatch(view.state.replaceSelection('    '))
       return true
   }},
+  { key: 'ArrowUp', run: (view) => {
+      if (showCommandSuggestions.value) {
+          selectedSuggestionIndex.value = (selectedSuggestionIndex.value - 1 + suggestions.length) % suggestions.length
+          return true
+      }
+      return false
+  }},
+  { key: 'ArrowDown', run: (view) => {
+      if (showCommandSuggestions.value) {
+          selectedSuggestionIndex.value = (selectedSuggestionIndex.value + 1) % suggestions.length
+          return true
+      }
+      return false
+  }},
+  { key: 'Enter', run: (view) => {
+      if (showCommandSuggestions.value) {
+          // If enter pressed while suggestion visible, select it?
+          // Or just let user execute if they typed it fully?
+          // Let's auto-complete if they are selecting
+          selectCommand(selectedSuggestionIndex.value)
+          return true
+      }
+      
+      view.dispatch(view.state.replaceSelection('\n'))
+      return true
+    }
+  },
   { key: 'Ctrl-Enter', run: (view) => {
       const content = view.state.doc.toString()
+      
+      // Check for commands first
+      const trimmed = content.trim()
+      if (trimmed.startsWith('/')) {
+          emit('command', trimmed)
+          view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: '' } })
+          showCommandSuggestions.value = false
+          return true
+      }
+      
       emit('save', content)
       view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: '' } })
       return true
     }
   },
-  { key: 'Enter', run: (view) => {
-      view.dispatch(view.state.replaceSelection('\n'))
-      return true
-    }
-  },
-  { key: 'Shift-Enter', run: () => false }, // Default behavior is fine, or map to newline too
-  { key: 'Escape', run: () => { emit('cancel'); return true } },
+  { key: 'Shift-Enter', run: () => false }, 
+  { key: 'Escape', run: () => { 
+      if (showCommandSuggestions.value) {
+          showCommandSuggestions.value = false
+          return true
+      }
+      emit('cancel'); return true 
+  } },
   
   // Formatting
   { key: 'Mod-b', run: toggleWrapper('**') }, // Bold
@@ -198,7 +244,7 @@ const minimalTheme = EditorView.theme({
     backgroundColor: "transparent",
     fontSize: "1.2rem",
     fontFamily: "inherit",
-    height: "100%" // Take full height of container
+    height: "100%" 
   },
   ".cm-content": {
     padding: "0",
@@ -215,7 +261,7 @@ const minimalTheme = EditorView.theme({
     backgroundColor: "transparent"
   },
   ".cm-gutters": {
-    display: "none" // Hide line numbers
+    display: "none" 
   },
   ".cm-scroller": {
     overflow: "auto"
@@ -235,11 +281,9 @@ const handlePaste = async (event, view) => {
   const items = event.clipboardData?.items
   if (!items) return false
 
-  // Check if we have files to handle
   let hasHandledContent = false
 
   for (const item of items) {
-    // Handle Images
     if (item.type.indexOf('image') !== -1) {
       event.preventDefault()
       hasHandledContent = true
@@ -251,7 +295,6 @@ const handlePaste = async (event, view) => {
              continue
       }
 
-      // Upload logic
       try {
         isUploading.value = true
         const arrayBuffer = await file.arrayBuffer()
@@ -260,7 +303,6 @@ const handlePaste = async (event, view) => {
         
         const webPath = await UploadAttachment(array, file.name || 'image.png')
         
-        // Insert Markdown
         const md = `![image](${webPath})`
         view.dispatch(view.state.replaceSelection(md))
       } catch (err) {
@@ -272,15 +314,7 @@ const handlePaste = async (event, view) => {
     }
   }
   
-  // Handle Files (Non-Image)
-  // Check if there are files AND it's not just plain text content being pasted as file
-  // Sometimes text is also available as file.
-  // But usually event.clipboardData.files is empty for pure text.
   if (event.clipboardData?.files?.length > 0 && !hasHandledContent) {
-    // Double check if it is text?
-    // If I copy text "abc", files is usually empty.
-    // If I copy a file from explorer, files has length 1.
-    
     event.preventDefault()
     isUploading.value = true
     
@@ -289,7 +323,7 @@ const handlePaste = async (event, view) => {
             for (const file of event.clipboardData.files) {
                 const isImage = file.type.indexOf('image') !== -1
                 
-                if (file.size > 50 * 1024 * 1024) { // 50MB limit
+                if (file.size > 50 * 1024 * 1024) { 
                      alert(`File ${file.name} exceeds 50MB limit.`)
                      continue
                 }
@@ -322,8 +356,7 @@ const handlePaste = async (event, view) => {
     return true
   }
   
-  // Default behavior for text
-  return false
+  return false 
 }
 
 onMounted(() => {
@@ -332,74 +365,48 @@ onMounted(() => {
   const updateListener = EditorView.updateListener.of((update) => {
     if (update.docChanged) {
       const content = update.state.doc.toString()
-      // Only render if not empty
+      // Update Preview
       if (content.trim()) {
         previewContent.value = DOMPurify.sanitize(marked(content))
       } else {
         previewContent.value = ''
+      }
+
+      // Check for Command
+      if (content.startsWith('/')) {
+          showCommandSuggestions.value = true
+          // Optionally filter suggestions based on typing?
+          // For now show all, simple MVP.
+      } else {
+          showCommandSuggestions.value = false
       }
     }
   })
   
   const domEventHandler = EditorView.domEventHandlers({
     paste: (event, view) => {
-      // Wait, handlePaste is async. CodeMirror expects return bool immediately.
-      // If we return false, default happens.
-      // But handlePaste might decide later it was a file?
-      // Actually handlePaste preventsDefault synchronously if it finds a file.
-      // The async part is the upload.
-      // So we can just call it.
-      
       const result = handlePaste(event, view)
-      // If handlePaste returns a Promise (because async), we can't use its return value directly for sync prevention.
-      // But handlePaste calls event.preventDefault() internally if matches.
-      // So we just return false generally? Or rely on event default prevented?
-      
-      // CodeMirror logic: "If a handler returns true, the event is assumed to be handled..."
-      // We need to detect if we handled it.
-      
-      // Fix: handlePaste is async, so it returns a Promise.
-      // We need to check items synchronously.
-      // Let's make handlePaste synchronous in decision making, async in execution.
-      // But `item.getAsFile()` is sync.
-      // The issue is `await handlePaste` isn't possible here.
-      
-      // We can refactor handlePaste to NOT be async wrapper, but fire async operations.
-      // But for now, let's just rely on the fact that we call preventDefault() inside.
-      // However, if we return false (because it's a promise object), CM might try to handle it too?
-      // If preventDefault is called, CM usually respects it.
-      
-      // Let's see. Promise object is truthy? Yes.
-      // So if we return handlePaste(), we are returning true (Promise).
-      // This prevents CM default paste! Even for text!
-      // THIS IS THE BUG.
-      
-      // We must ONLY return true if we actually found a file/image.
-      // But we can't know that from the Promise result immediately unless we peek.
-      
-      // Refactor: Check synchronously.
+      // Sync check logic similar to before, simplified here for brevity
       const items = event.clipboardData?.items
       if (!items) return false
       
       let isCustom = false
-      // Check for images
       for (const item of items) {
           if (item.type.indexOf('image') !== -1) {
               isCustom = true
               break
           }
       }
-      // Check for files (if not image item found)
       if (!isCustom && event.clipboardData?.files?.length > 0) {
           isCustom = true
       }
       
       if (isCustom) {
-          handlePaste(event, view) // Fire and forget async
-          return true // Tell CM we handled it
+          handlePaste(event, view) 
+          return true 
       }
       
-      return false // Tell CM to handle it (Text)
+      return false 
     }
   })
 
@@ -409,7 +416,7 @@ onMounted(() => {
       history(),
       keymap.of([...customKeymap, ...standardKeymap, ...historyKeymap]),
       markdown(),
-      syntaxHighlighting(defaultHighlightStyle), // Use default highligting
+      syntaxHighlighting(defaultHighlightStyle), 
       minimalTheme,
       placeholder('Type your thought...'),
       EditorView.lineWrapping,
@@ -440,17 +447,27 @@ onBeforeUnmount(() => {
       <div v-if="previewContent" class="live-preview markdown-body" v-html="previewContent"></div>
     </div>
 
+    <!-- Command Suggestions Popover -->
+    <div v-if="showCommandSuggestions" class="command-suggestions">
+        <div 
+            v-for="(cmd, index) in suggestions" 
+            :key="index" 
+            class="suggestion-item"
+            :class="{ active: index === selectedSuggestionIndex }"
+            @click="selectCommand(index)"
+        >
+            <span class="cmd-label">{{ cmd.label }}</span>
+            <span class="cmd-desc">{{ cmd.desc }}</span>
+        </div>
+    </div>
+
     <div class="hint">
       <span>Ctrl+↵ save</span>
+      <span>/ command</span>
       <span>↵ newline</span>
       <span>Esc cancel</span>
       <span>Ctrl+B bold</span>
-      <span>Ctrl+I italic</span>
-      <span>Ctrl+K link</span>
-      <span>Ctrl+E code</span>
       <span>Ctrl+V paste img</span>
-      <span>Ctrl+1..6 H1-6</span>
-      <span>Ctrl+Shift+8 list</span>
       <span v-if="isOpeningFile" class="status-opening">Opening file...</span>
       <span v-if="isUploading" class="status-opening">Uploading...</span>
     </div>
@@ -465,6 +482,7 @@ onBeforeUnmount(() => {
   margin-bottom: 20px;
   flex: 1; /* Allow it to grow */
   min-height: 0; /* Important for nested flex scrolling */
+  position: relative;
 }
 
 .editors-row {
@@ -519,6 +537,64 @@ onBeforeUnmount(() => {
   font-weight: bold;
   animation: pulse 1.5s infinite;
   margin-left: auto; /* Push to the right */
+}
+
+.command-suggestions {
+    position: absolute;
+    bottom: 30px; /* Above hints */
+    left: 0;
+    width: 300px;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 100;
+    overflow: hidden;
+}
+
+.suggestion-item {
+    padding: 8px 12px;
+    display: flex;
+    justify-content: space-between;
+    cursor: pointer;
+    border-bottom: 1px solid #eee;
+}
+
+.suggestion-item:last-child {
+    border-bottom: none;
+}
+
+.suggestion-item.active {
+    background-color: #f0f7ff;
+}
+
+.cmd-label {
+    font-weight: bold;
+    color: #007acc;
+}
+
+.cmd-desc {
+    color: #888;
+    font-size: 0.85rem;
+}
+
+@media (prefers-color-scheme: dark) {
+    .command-suggestions {
+        background: #2d2d2d;
+        border-color: #444;
+    }
+    .suggestion-item {
+        border-bottom-color: #444;
+    }
+    .suggestion-item.active {
+        background-color: #3d3d3d;
+    }
+    .cmd-label {
+        color: #4da6ff;
+    }
+    .cmd-desc {
+        color: #aaa;
+    }
 }
 
 @keyframes pulse {

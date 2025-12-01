@@ -1,11 +1,12 @@
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import { SaveNote, HideWindow, GetRecentNotes, OpenDailyNote, OpenDateNote } from '../../wailsjs/go/main/App'
+import { SaveNote, HideWindow, GetRecentNotes, OpenDailyNote, OpenDateNote, GetDailyNotes } from '../../wailsjs/go/main/App'
 import { WindowSetSize, EventsOn } from '../../wailsjs/runtime/runtime'
 
 // State Constants
 export const ViewState = {
   DEFAULT: 'default',
-  TIMELINE: 'timeline'
+  TIMELINE: 'timeline', // Legacy name, mapped to ContextPanel
+  CONTEXT_PANEL: 'context_panel'
 }
 
 export const ModalState = {
@@ -21,15 +22,17 @@ export const ActivityState = {
 }
 
 const COLLAPSED_HEIGHT = 600
-const EXPANDED_HEIGHT = 1000
-const WIDTH = 800
+// const EXPANDED_HEIGHT = 1000
+const DEFAULT_WIDTH = 800
+const EXPANDED_WIDTH = 1400 // Increase width for side-by-side
 
 export function useApp() {
   // State Machine
   const appState = reactive({
     view: ViewState.DEFAULT,
     modal: ModalState.NONE,
-    activity: ActivityState.IDLE
+    activity: ActivityState.IDLE,
+    contextMode: 'list' // 'list' | 'export'
   })
 
   const inputRef = ref(null)
@@ -37,11 +40,12 @@ export function useApp() {
   let resetEventCancel = null
 
   // Computed Helpers
-  const isTimelineVisible = computed(() => appState.view === ViewState.TIMELINE)
+  const isContextPanelVisible = computed(() => appState.view === ViewState.CONTEXT_PANEL)
   const isCommandPaletteVisible = computed(() => appState.modal === ModalState.COMMAND_PALETTE)
   const isOpeningFile = computed(() => appState.activity === ActivityState.OPENING)
   const isSaving = computed(() => appState.activity === ActivityState.SAVING)
   const isLocked = computed(() => appState.activity === ActivityState.LOCKED)
+  const contextPanelMode = computed(() => appState.contextMode)
 
   // Actions
   const loadNotes = async () => {
@@ -54,12 +58,20 @@ export function useApp() {
 
   const hideAndReset = async () => {
     await HideWindow()
+    appState.view = ViewState.DEFAULT 
+    WindowSetSize(DEFAULT_WIDTH, COLLAPSED_HEIGHT)
   }
 
-  const toggleTimeline = async () => {
-    appState.view = appState.view === ViewState.DEFAULT ? ViewState.TIMELINE : ViewState.DEFAULT
-    const height = isTimelineVisible.value ? EXPANDED_HEIGHT : COLLAPSED_HEIGHT
-    WindowSetSize(WIDTH, height)
+  const toggleContextPanel = (mode = 'list') => {
+    if (appState.view === ViewState.CONTEXT_PANEL && appState.contextMode === mode) {
+        appState.view = ViewState.DEFAULT
+        WindowSetSize(DEFAULT_WIDTH, COLLAPSED_HEIGHT)
+    } else {
+        appState.view = ViewState.CONTEXT_PANEL
+        appState.contextMode = mode
+        // Expand width instead of height
+        WindowSetSize(EXPANDED_WIDTH, COLLAPSED_HEIGHT)
+    }
   }
 
   const toggleCommandPalette = () => {
@@ -68,6 +80,52 @@ export function useApp() {
 
   const closeCommandPalette = () => {
     appState.modal = ModalState.NONE
+  }
+
+  // Command Handler
+  const handleCommand = async (cmd) => {
+      const command = cmd.toLowerCase().trim()
+      
+      if (command === '/today' || command === '/list') {
+          const today = new Date().toISOString().split('T')[0]
+          try {
+              recentNotes.value = await GetDailyNotes(today, today) || []
+              toggleContextPanel('list')
+          } catch (err) {
+              console.error(err)
+          }
+          return
+      }
+      
+      if (command === '/week') {
+          const now = new Date()
+          const day = now.getDay() || 7 
+          if (day !== 1) now.setHours(-24 * (day - 1)) 
+          const startOfWeek = now.toISOString().split('T')[0]
+          const today = new Date().toISOString().split('T')[0]
+          
+          try {
+              recentNotes.value = await GetDailyNotes(startOfWeek, today) || []
+              toggleContextPanel('export')
+          } catch (err) {
+              console.error(err)
+          }
+          return
+      }
+
+      if (command === '/month') {
+        const now = new Date()
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
+        const today = new Date().toISOString().split('T')[0]
+        
+        try {
+            recentNotes.value = await GetDailyNotes(startOfMonth, today) || []
+            toggleContextPanel('export')
+        } catch (err) {
+            console.error(err)
+        }
+        return
+    }
   }
 
   const handleSave = async (content) => {
@@ -93,7 +151,6 @@ export function useApp() {
     // Slash command: open YYYY-MM-DD
     if (trimmed.startsWith('open ')) {
         const dateStr = trimmed.substring(5).trim()
-        // Simple regex check for YYYY-MM-DD
         if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
             appState.activity = ActivityState.OPENING
             try {
@@ -101,7 +158,6 @@ export function useApp() {
                 await hideAndReset()
             } catch (error) {
                 console.error('Failed to open date note:', error)
-                // Maybe show error in UI? For now console.
             } finally {
                 appState.activity = ActivityState.IDLE
             }
@@ -111,7 +167,13 @@ export function useApp() {
 
     try {
       await SaveNote(content)
-      await loadNotes()
+      if (isContextPanelVisible.value && appState.contextMode === 'list') {
+          const today = new Date().toISOString().split('T')[0]
+          recentNotes.value = await GetDailyNotes(today, today) || []
+      } else {
+          await loadNotes()
+      }
+      
       await hideAndReset()
     } catch (error) {
       console.error('Failed to save note:', error)
@@ -124,6 +186,11 @@ export function useApp() {
   }
 
   const handleEsc = () => {
+    if (isContextPanelVisible.value) {
+        appState.view = ViewState.DEFAULT
+        WindowSetSize(DEFAULT_WIDTH, COLLAPSED_HEIGHT)
+        return
+    }
     hideAndReset()
   }
 
@@ -138,12 +205,10 @@ export function useApp() {
 
   // Event Handlers
   const handleKeydown = async (e) => {
-    // Open Today's Note with Ctrl+H
     if (e.ctrlKey && e.key.toLowerCase() === 'h') {
       e.preventDefault()
       openDailyNoteWrapper()
     }
-    // Toggle command palette with Ctrl+P or Cmd+P
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'p') {
       e.preventDefault()
       toggleCommandPalette()
@@ -158,8 +223,6 @@ export function useApp() {
       }
     }, 500)
   
-    loadNotes()
-    // Force focus back to input
     nextTick(() => {
       if (inputRef.value) {
         inputRef.value.focus()
@@ -167,19 +230,12 @@ export function useApp() {
     })
   }
 
-  // const handleBlur = () => {
-  //   if (appState.activity !== ActivityState.IDLE || isCommandPaletteVisible.value) return
-  //   hideAndReset()
-  // }
-
   // Lifecycle
   onMounted(() => {
-    loadNotes()
-    WindowSetSize(WIDTH, COLLAPSED_HEIGHT)
+    WindowSetSize(DEFAULT_WIDTH, COLLAPSED_HEIGHT)
 
     window.addEventListener('keydown', handleKeydown)
     window.addEventListener('focus', handleFocus)
-    // window.addEventListener('blur', handleBlur)
 
     resetEventCancel = EventsOn("app:reset", () => {
       nextTick(() => {
@@ -187,14 +243,14 @@ export function useApp() {
           inputRef.value.focus()
         }
       })
-      loadNotes()
+      appState.view = ViewState.DEFAULT
+      WindowSetSize(DEFAULT_WIDTH, COLLAPSED_HEIGHT)
     })
   })
 
   onUnmounted(() => {
     window.removeEventListener('keydown', handleKeydown)
     window.removeEventListener('focus', handleFocus)
-    // window.removeEventListener('blur', handleBlur)
     if (resetEventCancel) {
       resetEventCancel()
     }
@@ -204,19 +260,18 @@ export function useApp() {
     appState,
     inputRef,
     recentNotes,
-    // Computed
-    isTimelineVisible,
+    isContextPanelVisible,
+    contextPanelMode,
     isCommandPaletteVisible,
     isOpeningFile,
     isSaving,
     isLocked,
-    // Methods
-    toggleTimeline,
+    toggleContextPanel,
     toggleCommandPalette,
     closeCommandPalette,
     handleSave,
     handleEsc,
+    handleCommand,
     openDailyNote: openDailyNoteWrapper
   }
 }
-

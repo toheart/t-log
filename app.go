@@ -190,13 +190,34 @@ func (a *App) SaveNote(content string) error {
 }
 
 // GetRecentNotes reads and parses notes from the last N days
-func (a *App) GetRecentNotes() []note.NoteEntry {
+func (a *App) GetRecentNotes() []note.DailyNote {
 	entries, err := note.GetRecentNotes(a.config.RootPath, a.config.HistoryDays)
 	if err != nil {
 		fmt.Printf("Error getting recent notes: %v\n", err)
+		return []note.DailyNote{}
+	}
+	return entries
+}
+
+// GetNotesByDateRange reads notes within a start and end date range
+// start, end format: YYYY-MM-DD
+func (a *App) GetNotesByDateRange(start, end string) []note.NoteEntry {
+	entries, err := note.GetNotesByDateRange(a.config.RootPath, start, end)
+	if err != nil {
+		fmt.Printf("Error getting notes by date range: %v\n", err)
 		return []note.NoteEntry{}
 	}
 	return entries
+}
+
+// GetDailyNotes reads full file contents within a start and end date range
+func (a *App) GetDailyNotes(start, end string) []note.DailyNote {
+	notes, err := note.GetDailyNotes(a.config.RootPath, start, end)
+	if err != nil {
+		fmt.Printf("Error getting daily notes: %v\n", err)
+		return []note.DailyNote{}
+	}
+	return notes
 }
 
 // OpenDailyNote opens the current day's markdown file in the system default editor

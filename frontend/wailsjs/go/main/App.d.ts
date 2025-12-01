@@ -10,7 +10,11 @@ export function GetCommands():Promise<Array<command.Command>>;
 
 export function GetConfig():Promise<config.AppConfig>;
 
-export function GetRecentNotes():Promise<Array<note.NoteEntry>>;
+export function GetDailyNotes(arg1:string,arg2:string):Promise<Array<note.DailyNote>>;
+
+export function GetNotesByDateRange(arg1:string,arg2:string):Promise<Array<note.NoteEntry>>;
+
+export function GetRecentNotes():Promise<Array<note.DailyNote>>;
 
 export function Greet(arg1:string):Promise<string>;
 

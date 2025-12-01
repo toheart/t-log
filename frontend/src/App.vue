@@ -1,7 +1,7 @@
 <script setup>
 import { useApp } from './composables/useApp'
 import InputArea from './components/InputArea.vue'
-import Timeline from './components/Timeline.vue'
+import ContextPanel from './components/ContextPanel.vue'
 import CommandPalette from './components/CommandPalette.vue'
 import SettingsModal from './components/SettingsModal.vue'
 import { ref } from 'vue'
@@ -9,11 +9,13 @@ import { ref } from 'vue'
 const {
   inputRef,
   recentNotes,
-  isTimelineVisible,
+  contextPanelMode,
+  isContextPanelVisible,
   isCommandPaletteVisible,
   isOpeningFile,
   handleSave,
   handleEsc,
+  handleCommand,
   openDailyNote,
   closeCommandPalette
 } = useApp()
@@ -22,19 +24,23 @@ const settingsRef = ref(null)
 </script>
 
 <template>
-  <main class="app-container" :class="{ expanded: isTimelineVisible }">
-    <InputArea 
-      ref="inputRef"
-      :is-opening-file="isOpeningFile"
-      @save="handleSave"
-      @cancel="handleEsc"
-    />
-    <div class="timeline-wrapper" v-show="isTimelineVisible">
-        <div class="divider"></div>
-        <Timeline :notes="recentNotes" />
+  <main class="app-container" :class="{ expanded: isContextPanelVisible }">
+    <div class="main-column">
+        <InputArea 
+          ref="inputRef"
+          :is-opening-file="isOpeningFile"
+          @save="handleSave"
+          @cancel="handleEsc"
+          @command="handleCommand"
+        />
+        <div class="toggle-hint" @click="openDailyNote" title="Open Today's Note (Ctrl+H)">
+            <span>Open MD</span>
+        </div>
     </div>
-    <div class="toggle-hint" @click="openDailyNote" title="Open Today's Note (Ctrl+H)">
-        <span>Open MD</span>
+    
+    <div class="side-panel" v-if="isContextPanelVisible">
+        <div class="divider-vertical"></div>
+        <ContextPanel :notes="recentNotes" :mode="contextPanelMode" />
     </div>
 
     <CommandPalette 
@@ -61,34 +67,51 @@ html, body {
 
 .app-container {
   display: flex;
-  flex-direction: column;
+  flex-direction: row; /* Layout changed to Row */
   height: 100%;
-  background-color: rgba(255, 255, 255, 0.9); /* Slightly more opaque */
+  background-color: rgba(255, 255, 255, 0.9); 
   border-radius: 8px;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
   padding: 20px;
   box-sizing: border-box;
-  transition: height 0.3s ease;
+  transition: width 0.3s ease; /* Transition width instead of height */
   position: relative;
+  overflow: hidden;
 }
 
-.timeline-wrapper {
-    flex: 1;
+.main-column {
+    flex: 1; /* Takes full width when side-panel is hidden */
     display: flex;
     flex-direction: column;
-    overflow: hidden;
-    margin-top: 10px;
+    height: 100%;
+    min-width: 0; /* Prevents flex item from overflowing */
+    position: relative;
 }
 
-.divider {
-    height: 1px;
+.side-panel {
+    width: 50%; /* Takes half width when visible */
+    display: flex;
+    flex-direction: row;
+    height: 100%;
+    min-width: 0;
+    animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+    from { opacity: 0; transform: translateX(20px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+.divider-vertical {
+    width: 1px;
     background-color: rgba(0,0,0,0.1);
-    margin-bottom: 10px;
+    margin: 0 15px;
+    flex-shrink: 0;
 }
 
 .toggle-hint {
     position: absolute;
-    bottom: 5px;
+    bottom: 0;
     left: 50%;
     transform: translateX(-50%);
     font-size: 10px;
@@ -107,7 +130,7 @@ html, body {
     background-color: rgba(30, 30, 30, 0.9);
     color: white;
   }
-  .divider {
+  .divider-vertical {
       background-color: rgba(255,255,255,0.1);
   }
 }
